@@ -2,27 +2,35 @@
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.util.*;
 
 public class KOFGame extends JPanel implements ActionListener, KeyListener {
-    Timer timer;
+    javax.swing.Timer timer;
     Player p1, p2;
+    boolean gameStarted = false;
     boolean gameOver = false;
     String winner = "";
+    Character[] characters = {
+        new Character("Ken", Color.BLUE, 5, "Punch"),
+        new Character("Ryu", Color.RED, 4, "Fireball"),
+        new Character("ChunLi", Color.PINK, 6, "Kick")
+    };
+    int selectIndexP1 = 0, selectIndexP2 = 1;
 
     public KOFGame() {
         setPreferredSize(new Dimension(800, 400));
         setBackground(Color.BLACK);
         setFocusable(true);
         addKeyListener(this);
-        p1 = new Player(100, 300, Color.BLUE, KeyEvent.VK_A, KeyEvent.VK_D, KeyEvent.VK_W, KeyEvent.VK_S, KeyEvent.VK_F, "Player 1");
-        p2 = new Player(600, 300, Color.RED, KeyEvent.VK_LEFT, KeyEvent.VK_RIGHT, KeyEvent.VK_UP, KeyEvent.VK_DOWN, KeyEvent.VK_ENTER, "Player 2");
-        timer = new Timer(30, this);
+        timer = new javax.swing.Timer(30, this);
         timer.start();
     }
 
     public void paintComponent(Graphics g) {
         super.paintComponent(g);
-        if (!gameOver) {
+        if (!gameStarted) {
+            drawCharacterSelection(g);
+        } else if (!gameOver) {
             p1.draw(g);
             p2.draw(g);
             p1.checkAttack(p2);
@@ -36,6 +44,23 @@ public class KOFGame extends JPanel implements ActionListener, KeyListener {
         }
     }
 
+    private void drawCharacterSelection(Graphics g) {
+        g.setColor(Color.WHITE);
+        g.setFont(new Font("Arial", Font.BOLD, 18));
+        g.drawString("P1: Use A/D to choose, F to confirm", 100, 50);
+        g.drawString("P2: Use ←/→ to choose, ENTER to confirm", 100, 80);
+        drawCharBox(g, characters[selectIndexP1], 150, 150);
+        drawCharBox(g, characters[selectIndexP2], 500, 150);
+    }
+
+    private void drawCharBox(Graphics g, Character c, int x, int y) {
+        g.setColor(c.color);
+        g.fillRect(x, y, 100, 100);
+        g.setColor(Color.WHITE);
+        g.drawString(c.name, x, y - 10);
+        g.drawString("Skill: " + c.skillName, x, y + 120);
+    }
+
     private void drawHealthBars(Graphics g) {
         g.setColor(Color.GREEN);
         g.fillRect(50, 20, p1.hp * 2, 20);
@@ -43,30 +68,30 @@ public class KOFGame extends JPanel implements ActionListener, KeyListener {
         g.setColor(Color.WHITE);
         g.drawRect(50, 20, 200, 20);
         g.drawRect(500, 20, 200, 20);
-        g.drawString("P1", 20, 35);
-        g.drawString("P2", 750, 35);
+        g.drawString(p1.character.name, 20, 35);
+        g.drawString(p2.character.name, 750, 35);
     }
 
     private void checkVictory() {
         if (p1.hp <= 0) {
-            winner = "Player 2";
+            winner = p2.character.name;
             gameOver = true;
         } else if (p2.hp <= 0) {
-            winner = "Player 1";
+            winner = p1.character.name;
             gameOver = true;
         }
     }
 
     public void actionPerformed(ActionEvent e) {
-        if (!gameOver) {
+        if (gameStarted && !gameOver) {
             p1.move();
             p2.move();
-            repaint();
         }
+        repaint();
     }
 
     public static void main(String[] args) {
-        JFrame frame = new JFrame("Java 格鬥遊戲 - 完整版");
+        JFrame frame = new JFrame("Java 格鬥遊戲 - 選角+技能版");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setResizable(false);
         frame.add(new KOFGame());
@@ -76,44 +101,75 @@ public class KOFGame extends JPanel implements ActionListener, KeyListener {
     }
 
     public void keyPressed(KeyEvent e) {
-        p1.keyPressed(e);
-        p2.keyPressed(e);
+        if (!gameStarted) {
+            int code = e.getKeyCode();
+            if (code == KeyEvent.VK_A) selectIndexP1 = (selectIndexP1 + characters.length - 1) % characters.length;
+            if (code == KeyEvent.VK_D) selectIndexP1 = (selectIndexP1 + 1) % characters.length;
+            if (code == KeyEvent.VK_LEFT) selectIndexP2 = (selectIndexP2 + characters.length - 1) % characters.length;
+            if (code == KeyEvent.VK_RIGHT) selectIndexP2 = (selectIndexP2 + 1) % characters.length;
+            if (code == KeyEvent.VK_F && p1 == null) {
+                p1 = new Player(100, 300, characters[selectIndexP1], KeyEvent.VK_A, KeyEvent.VK_D, KeyEvent.VK_W, KeyEvent.VK_S, KeyEvent.VK_F);
+            }
+            if (code == KeyEvent.VK_ENTER && p2 == null) {
+                p2 = new Player(600, 300, characters[selectIndexP2], KeyEvent.VK_LEFT, KeyEvent.VK_RIGHT, KeyEvent.VK_UP, KeyEvent.VK_DOWN, KeyEvent.VK_ENTER);
+            }
+            if (p1 != null && p2 != null) gameStarted = true;
+        } else {
+            p1.keyPressed(e);
+            p2.keyPressed(e);
+        }
     }
+
     public void keyReleased(KeyEvent e) {
-        p1.keyReleased(e);
-        p2.keyReleased(e);
+        if (gameStarted) {
+            p1.keyReleased(e);
+            p2.keyReleased(e);
+        }
     }
+
     public void keyTyped(KeyEvent e) {}
+
+    class Character {
+        String name;
+        Color color;
+        int speed;
+        String skillName;
+
+        public Character(String name, Color color, int speed, String skillName) {
+            this.name = name;
+            this.color = color;
+            this.speed = speed;
+            this.skillName = skillName;
+        }
+    }
 
     class Player {
         int x, y, width = 50, height = 100;
-        int speed = 5, hp = 100;
-        Color color;
+        int hp = 100;
+        Character character;
         boolean left, right, up, down, attack;
         int leftKey, rightKey, upKey, downKey, attackKey;
-        String name;
 
-        public Player(int x, int y, Color color, int l, int r, int u, int d, int atk, String name) {
+        public Player(int x, int y, Character c, int l, int r, int u, int d, int atk) {
             this.x = x;
             this.y = y;
-            this.color = color;
+            this.character = c;
             this.leftKey = l;
             this.rightKey = r;
             this.upKey = u;
             this.downKey = d;
             this.attackKey = atk;
-            this.name = name;
         }
 
         public void move() {
-            if (left) x -= speed;
-            if (right) x += speed;
-            if (up) y -= speed;
-            if (down) y += speed;
+            if (left) x -= character.speed;
+            if (right) x += character.speed;
+            if (up) y -= character.speed;
+            if (down) y += character.speed;
         }
 
         public void draw(Graphics g) {
-            g.setColor(color);
+            g.setColor(character.color);
             g.fillRect(x, y, width, height);
         }
 
