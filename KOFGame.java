@@ -4,307 +4,291 @@ import java.awt.event.*;
 import java.io.*;
 import java.util.*;
 
+
 public class KOFGame extends JPanel implements ActionListener, KeyListener {
 
-    @Override
-    public void actionPerformed(ActionEvent e) {
-        repaint();
-    }
+/* ----------------- 狀態 ----------------- */
+private final SettingsManager settings = new SettingsManager("keybinds.properties");
+private javax.swing.Timer timer = new javax.swing.Timer(16, this); // ~60 fps
 
-    @Override
-    public void keyTyped(KeyEvent e) {}
+/* 選角 */
+record Role(String name, Color color){}
+private final Role[] roles = {
+        new Role("Ken",   Color.BLUE),
+        new Role("Ryu",   Color.RED),
+        new Role("ChunLi",Color.PINK)
+};
+private int sel1=0, sel2=1;
+private boolean lock1=false, lock2=false;
 
-    @Override
-    public void keyReleased(KeyEvent e) {
-        if (gameStarted && p1 != null && p2 != null) {
-            p1.keyReleased(e.getKeyCode());
-            p2.keyReleased(e.getKeyCode());
-        }
-    }
+/* 遊戲 */
+private Player p1, p2;
+private final java.util.List<Skill> skills=new ArrayList<>();
+private boolean running=false, menu=false, rebinding=false;
+private String rebindingKey="", winner="";
 
-    javax.swing.Timer timer;
-    SettingsManager settings;
-    Player p1, p2;
-    boolean gameStarted = false, gameOver = false, inMenu = false, rebinding = false;
-    String rebindingPlayer = "", rebindingAction = "", winner = "";
-    ArrayList<SkillEffect> effects = new ArrayList<>();
+/* 設定方框 */
+private final Map<String, Rectangle> boxes=new LinkedHashMap<>();
 
-    int selectIndexP1 = 0, selectIndexP2 = 1;
-    boolean p1Locked = false, p2Locked = false;
-    Character[] characters = {
-        new Character("Ken", Color.BLUE),
-        new Character("Ryu", Color.RED),
-        new Character("ChunLi", Color.PINK)
-    };
+public KOFGame(){
+    setPreferredSize(new Dimension(800,500));
+    setBackground(Color.BLACK);
+    setFocusable(true); addKeyListener(this);
 
-    public KOFGame() {
-        settings = new SettingsManager("keybinds.properties");
-        setPreferredSize(new Dimension(800, 400));
-        setBackground(Color.BLACK);
-        setFocusable(true);
-        addKeyListener(this);
-        timer = new javax.swing.Timer(30, this);
-        timer.start();
-    }
-
-    class Character {
-        String name; Color color;
-        Character(String name, Color color) {
-            this.name = name; this.color = color;
-        }
-    }
-
-    class Player {
-    int x, y, width = 50, height = 100, hp = 100, skillCD = 0;
-    Color color;
-    boolean left, right, up, down, attack;
-    int leftKey, rightKey, upKey, downKey, attackKey, skillKey;
-
-    public Player(int x, int y, Color color, int l, int r, int u, int d, int atk, int skill) {
-        this.x = x; this.y = y; this.color = color;
-        this.leftKey = l; this.rightKey = r; this.upKey = u; this.downKey = d;
-        this.attackKey = atk; this.skillKey = skill;
-    }
-
-    void move() {
-        if (left) x -= 5;
-        if (right) x += 5;
-        if (up) y -= 5;
-        if (down) y += 5;
-    }
-
-    void draw(Graphics g) {
-        g.setColor(color);
-        g.fillRect(x, y, width, height);
-    }
-
-    void keyPressed(int code) {
-        if (code == leftKey) left = true;
-        if (code == rightKey) right = true;
-        if (code == upKey) up = true;
-        if (code == downKey) down = true;
-        if (code == attackKey) attack = true;
-    }
-
-    void keyReleased(int code) {
-        if (code == leftKey) left = false;
-        if (code == rightKey) right = false;
-        if (code == upKey) up = false;
-        if (code == downKey) down = false;
-        if (code == attackKey) attack = false;
-    }
-
-    Rectangle bounds() {
-        return new Rectangle(x, y, width, height);
-    }
-}
-
-class SkillEffect {
-    int x, y, speed = 10, size = 20;
-    Player owner;
-
-    SkillEffect(Player p) {
-        this.owner = p;
-        this.x = p == p1 ? p.x + p.width : p.x - size;
-        this.y = p.y + 40;
-    }
-
-    void update() {
-        x += owner == p1 ? speed : -speed;
-    }
-
-    void draw(Graphics g) {
-        g.setColor(Color.CYAN);
-        g.fillOval(x, y, size, size);
-    }
-
-    Rectangle bounds() {
-        return new Rectangle(x, y, size, size);
-    }
-}
-
-public static void main(String[] args) {
-        JFrame frame = new JFrame("KOF Game 完整版");
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setResizable(false);
-        frame.add(new KOFGame());
-        frame.pack();
-        frame.setLocationRelativeTo(null);
-        frame.setVisible(true);
-    }
-
-    //（以下重寫 keyPressed 與 drawHUD, drawMenu 等相關部分）
-
-public void keyPressed(KeyEvent e) {
-    int code = e.getKeyCode();
-    if (!gameStarted) {
-        if (!p1Locked) {
-            if (code == KeyEvent.VK_A) selectIndexP1 = (selectIndexP1 + characters.length - 1) % characters.length;
-            if (code == KeyEvent.VK_D) selectIndexP1 = (selectIndexP1 + 1) % characters.length;
-            if (code == KeyEvent.VK_F) p1Locked = true;
-        }
-        if (!p2Locked) {
-            if (code == KeyEvent.VK_LEFT) selectIndexP2 = (selectIndexP2 + characters.length - 1) % characters.length;
-            if (code == KeyEvent.VK_RIGHT) selectIndexP2 = (selectIndexP2 + 1) % characters.length;
-            if (code == KeyEvent.VK_ENTER) p2Locked = true;
-        }
-        return;
-    }
-    if (gameOver && code == KeyEvent.VK_R) {
-        p1 = null; p2 = null;
-        p1Locked = false; p2Locked = false;
-        gameStarted = false; gameOver = false;
-        winner = "";
-        effects.clear();
-        return;
-    }
-    if (code == KeyEvent.VK_ESCAPE) {
-        inMenu = !inMenu;
-        rebinding = false;
-        return;
-    }
-    if (inMenu) {
-        if (rebinding) {
-            settings.setKey(rebindingPlayer + "_" + rebindingAction, code);
-            settings.save();
-            rebinding = false;
-        } else {
-            if (code == KeyEvent.VK_A) {
-                rebindingPlayer = "P1";
-                rebindingAction = "SKILL";
-                rebinding = true;
-            } else if (code == KeyEvent.VK_B) {
-                rebindingPlayer = "P2";
-                rebindingAction = "SKILL";
-                rebinding = true;
+    buildBoxes();
+    addMouseListener(new MouseAdapter(){
+        public void mousePressed(MouseEvent e){
+            if(menu && !rebinding){
+                for(var en: boxes.entrySet()){
+                    if(en.getValue().contains(e.getPoint())){
+                        rebindingKey = en.getKey(); rebinding = true; break;
+                    }
+                }
             }
         }
-        return;
-    }
-    if (gameStarted && p1 != null && p2 != null) {
-        p1.keyPressed(code);
-        p2.keyPressed(code);
-        if (code == p1.skillKey && p1.skillCD == 0) {
-            effects.add(new SkillEffect(p1));
-            p1.skillCD = 300;
-        }
-        if (code == p2.skillKey && p2.skillCD == 0) {
-            effects.add(new SkillEffect(p2));
-            p2.skillCD = 300;
-        }
-    }
+    });
+    timer.start();
 }
 
-void drawMenu(Graphics g) {
+/* ----------------- 畫面 ----------------- */
+@Override protected void paintComponent(Graphics g){
+    super.paintComponent(g);
+    if(!running)                 drawSelect(g);
+    else if(menu)                drawMenu(g);
+    else if(!winner.isEmpty())   drawWinner(g);
+    else                         drawBattle(g);
+}
+/* 選角 */
+private void drawSelect(Graphics g){
     g.setColor(Color.WHITE);
-    g.setFont(new Font("Arial", Font.BOLD, 20));
-    g.drawString("ESC 選單 - 鍵位設定", 250, 50);
-    int y = 100;
-    for (String key : settings.getKeys()) {
-        g.drawString(key + " = " + KeyEvent.getKeyText(settings.getKeyCode(key)), 200, y);
-        y += 25;
-    }
-    if (rebinding) {
-        g.setColor(Color.YELLOW);
-        g.drawString("請按鍵設為 " + rebindingPlayer + " 的 " + rebindingAction, 200, y);
-    } else {
-        g.setColor(Color.CYAN);
-        g.drawString("A 設定 P1 技能鍵, B 設定 P2 技能鍵", 200, y);
-    }
-    g.setColor(Color.LIGHT_GRAY);
-    g.drawString("ESC 返回遊戲", 300, y + 40);
+    g.drawString("P1: A/D to select, F to lock", 100,40);
+    g.drawString("P2: ←/→ to select, ENTER to lock", 100,60);
+    drawRoleBox(g, roles[sel1], 150,120, "P1 "+(lock1?"[OK]":""));
+    drawRoleBox(g, roles[sel2], 500,120, "P2 "+(lock2?"[OK]":""));
 }
+private void drawRoleBox(Graphics g, Role r,int x,int y,String label){
+    g.setColor(r.color); g.fillRect(x,y,100,100);
+    g.setColor(Color.WHITE); g.drawRect(x,y,100,100);
+    g.drawString(label,x,y-10); g.drawString(r.name,x+20,y+120);
+}
+/* ESC 選單 */
+private void drawMenu(Graphics g){
+    g.setColor(Color.WHITE); g.setFont(new Font("Arial",Font.BOLD,20));
+    g.drawString("ESC Menu - Key Bindings", 250,28);
+    g.setFont(new Font("Arial",Font.PLAIN,14));
+    for(var e: boxes.entrySet()){
+        Rectangle b=e.getValue();
+        g.setColor(Color.CYAN); g.fillRect(b.x,b.y,b.width,b.height);
+        g.setColor(Color.BLACK);
+        g.drawString(e.getKey()+" = "+nice(settings.k(e.getKey())), b.x+8,b.y+16);
+    }
+    g.setColor(rebinding?Color.YELLOW:Color.LIGHT_GRAY);
+    g.drawString(rebinding?("Press a key for "+rebindingKey):"ESC to return", 260, 480);
+}
+/* 戰鬥 */
+private void drawBattle(Graphics g){
+    p1.move(); p2.move(); p1.draw(g); p2.draw(g);
+    drawHUD(g);
 
-void drawHUD(Graphics g) {
+    var it=skills.iterator();
+    while(it.hasNext()){
+        Skill s=it.next(); s.update(); s.draw(g);
+        if(s.hit(p1) && s.owner!=p1){ p1.hp-=5; it.remove(); }
+        else if(s.hit(p2)&& s.owner!=p2){ p2.hp-=5; it.remove();}
+        else if(s.outOf(getWidth()))     it.remove();
+    }
+    if(p1.hp<=0 || p2.hp<=0) winner = p1.hp<=0 ? "P2" : "P1";
+
+    if(p1.cool>0) p1.cool--;  if(p2.cool>0) p2.cool--;
+}
+/* HUD */
+private void drawHUD(Graphics g){
     g.setColor(Color.GREEN);
-    g.fillRect(50, 20, p1.hp * 2, 20);
-    g.fillRect(500 + (100 - p2.hp) * 2, 20, p2.hp * 2, 20);
+    g.fillRect(50,20, p1.hp*2,15);
+    g.fillRect(550,20,p2.hp*2,15);
     g.setColor(Color.WHITE);
-    g.drawRect(50, 20, 200, 20);
-    g.drawRect(500, 20, 200, 20);
-    g.drawString("P1 HP", 20, 15);
-    g.drawString("P2 HP", 720, 15);
+    g.drawRect(50,20,200,15); g.drawRect(550,20,200,15);
 
     g.setColor(Color.CYAN);
-    g.fillRect(50, 45, 200 - p1.skillCD * 200 / 300, 8);
-    g.fillRect(500, 45, 200 - p2.skillCD * 200 / 300, 8);
+    g.fillRect(50,38, 200-p1.cool*200/300,8);
+    g.fillRect(550,38,200-p2.cool*200/300,8);
     g.setColor(Color.WHITE);
-    g.drawRect(50, 45, 200, 8);
-    g.drawRect(500, 45, 200, 8);
+    g.drawRect(50,38,200,8); g.drawRect(550,38,200,8);
+}
+/* 勝負 */
+private void drawWinner(Graphics g){
+    g.setColor(Color.YELLOW); g.setFont(new Font("Arial",Font.BOLD,32));
+    g.drawString(winner+" Wins!", 300,220);
+    g.setFont(new Font("Arial",Font.PLAIN,18));
+    g.drawString("Press R to restart", 320,260);
 }
 
+/* ----------------- 事件 ----------------- */
+@Override public void actionPerformed(ActionEvent e){ repaint(); }
 
+/* 鍵盤 */
+@Override public void keyPressed(KeyEvent e){
+    int c=e.getKeyCode();
 
-    public void paintComponent(Graphics g) {
-        super.paintComponent(g);
-        if (!gameStarted) {
-            drawSelection(g);
-        } else if (inMenu) {
-            drawMenu(g);
-        } else if (gameOver) {
-            g.setColor(Color.YELLOW);
-            g.setFont(new Font("Arial", Font.BOLD, 36));
-            g.drawString(winner + " Wins!", 300, 200);
-            g.setFont(new Font("Arial", Font.PLAIN, 18));
-            g.drawString("Press R to Restart", 320, 250);
-        } else {
-            p1.move();
-            p2.move();
-            p1.draw(g);
-            p2.draw(g);
-            drawHUD(g);
-            updateAndDrawEffects(g);
-        }
+    /* ESC 菜單開關 */
+    if(running && c==KeyEvent.VK_ESCAPE){ menu=!menu; rebinding=false; return; }
+
+    /* 菜單內鍵重綁 */
+    if(menu){
+        if(rebinding){ settings.setKey(rebindingKey,c); settings.save(); applyKey(rebindingKey,c); rebinding=false; }
+        return;
     }
 
-    void updateAndDrawEffects(Graphics g) {
-        Iterator<SkillEffect> it = effects.iterator();
-        while (it.hasNext()) {
-            SkillEffect e = it.next();
-            e.update();
-            e.draw(g);
-            if (e.bounds().intersects(p1.bounds()) && e.owner != p1) {
-                p1.hp -= 5;
-                it.remove();
-            } else if (e.bounds().intersects(p2.bounds()) && e.owner != p2) {
-                p2.hp -= 5;
-                it.remove();
-            } else if (e.x < 0 || e.x > getWidth()) {
-                it.remove();
-            }
+    /* 選角階段 */
+    if(!running){
+        if(!lock1){
+            if(c==KeyEvent.VK_A) sel1=(sel1+roles.length-1)%roles.length;
+            if(c==KeyEvent.VK_D) sel1=(sel1+1)%roles.length;
+            if(c==KeyEvent.VK_F) lock1=true;
         }
-        if (p1.hp <= 0 || p2.hp <= 0) {
-            winner = p1.hp <= 0 ? "P2" : "P1";
-            gameOver = true;
+        if(!lock2){
+            if(c==KeyEvent.VK_LEFT)  sel2=(sel2+roles.length-1)%roles.length;
+            if(c==KeyEvent.VK_RIGHT) sel2=(sel2+1)%roles.length;
+            if(c==KeyEvent.VK_ENTER) lock2=true;
         }
-        if (p1.skillCD > 0) p1.skillCD--;
-        if (p2.skillCD > 0) p2.skillCD--;
+        if(lock1 && lock2) startGame();
+        return;
     }
 
-    void drawSelection(Graphics g) {
-        g.setColor(Color.WHITE);
-        g.drawString("P1: A/D to select, F to lock", 100, 50);
-        g.drawString("P2: ←/→ to select, ENTER to lock", 100, 70);
-        drawCharBox(g, characters[selectIndexP1], 150, 150, "P1 " + (p1Locked ? "[Locked]" : ""));
-        drawCharBox(g, characters[selectIndexP2], 500, 150, "P2 " + (p2Locked ? "[Locked]" : ""));
-        if (p1Locked && p2Locked && p1 == null && p2 == null) {
-            p1 = new Player(100, 300, characters[selectIndexP1].color,
-                    settings.getKeyCode("P1_LEFT"), settings.getKeyCode("P1_RIGHT"),
-                    settings.getKeyCode("P1_UP"), settings.getKeyCode("P1_DOWN"),
-                    settings.getKeyCode("P1_ATTACK"), settings.getKeyCode("P1_SKILL"));
-            p2 = new Player(600, 300, characters[selectIndexP2].color,
-                    settings.getKeyCode("P2_LEFT"), settings.getKeyCode("P2_RIGHT"),
-                    settings.getKeyCode("P2_UP"), settings.getKeyCode("P2_DOWN"),
-                    settings.getKeyCode("P2_ATTACK"), settings.getKeyCode("P2_SKILL"));
-            gameStarted = true;
+    /* 勝負畫面 */
+    if(!winner.isEmpty()){ if(c==KeyEvent.VK_R) reset(); return; }
+
+    /* 遊戲中控制 */
+    p1.handle(c,true); p2.handle(c,true);
+    if(c==p1.skill && p1.cool==0){ skills.add(new Skill(p1)); p1.cool=300; }
+    if(c==p2.skill && p2.cool==0){ skills.add(new Skill(p2)); p2.cool=300; }
+}
+@Override public void keyReleased(KeyEvent e){ p1.handle(e.getKeyCode(),false); p2.handle(e.getKeyCode(),false); }
+@Override public void keyTyped(KeyEvent e){}
+
+/* ----------------- 小工具 ----------------- */
+private void buildBoxes(){
+    int y=70;
+    for(String k: new String[]{"P1_LEFT","P1_RIGHT","P1_UP","P1_DOWN","P1_ATTACK","P1_SKILL"}){
+        boxes.put(k,new Rectangle(200,y,300,25)); y+=30;
+    }
+    y=280;
+    for(String k: new String[]{"P2_LEFT","P2_RIGHT","P2_UP","P2_DOWN","P2_ATTACK","P2_SKILL"}){
+        boxes.put(k,new Rectangle(200,y,300,25)); y+=30;
+    }
+}
+private void startGame(){
+    p1 = new Player(100,380, roles[sel1].color, keys("P1_"));
+    p2 = new Player(660,380, roles[sel2].color, keys("P2_"));
+    running = true;
+}
+private void reset(){ winner=""; running=false; lock1=lock2=false; skills.clear(); }
+private int[] keys(String pre){ return new int[]{ settings.k(pre+"LEFT"), settings.k(pre+"RIGHT"), settings.k(pre+"UP"), settings.k(pre+"DOWN"), settings.k(pre+"ATTACK"), settings.k(pre+"SKILL") }; }
+private void applyKey(String k,int code){ if(p1!=null) p1.apply(k,code); if(p2!=null) p2.apply(k,code); }
+
+private static String nice(int code){ return switch(code){ case KeyEvent.VK_LEFT->"←"; case KeyEvent.VK_RIGHT->"→"; case KeyEvent.VK_UP->"↑"; case KeyEvent.VK_DOWN->"↓"; default->KeyEvent.getKeyText(code);} ; }
+
+/* ----------------- Player ----------------- */
+static class Player{
+    int x,y,w=40,h=80,hp=100,cool=0;
+    Color col; boolean faceR=true;
+    int l,r,u,d,atk,skill; boolean L,R,U,D;
+        Player(int x,int y,Color c,int[] k){
+        this.x=x; this.y=y; this.col=c;
+        l=k[0]; r=k[1]; u=k[2]; d=k[3]; atk=k[4]; skill=k[5];
+    }
+    /* 位置與繪圖 */
+    void move(){
+        int s=5;
+        if(L){ x-=s; faceR=false; }
+        if(R){ x+=s; faceR=true;  }
+        if(U) y-=s;
+        if(D) y+=s;
+    }
+    void draw(Graphics g){
+        g.setColor(col); g.fillRect(x,y,w,h);
+    }
+    /* 鍵處理 */
+    void handle(int code,boolean press){
+        if(code==l) L=press;
+        if(code==r) R=press;
+        if(code==u) U=press;
+        if(code==d) D=press;
+    }
+    /* 改鍵後同步 */
+    void apply(String key,int c){
+        switch(key){
+            case "P1_LEFT","P2_LEFT"   -> l=c;
+            case "P1_RIGHT","P2_RIGHT" -> r=c;
+            case "P1_UP","P2_UP"       -> u=c;
+            case "P1_DOWN","P2_DOWN"   -> d=c;
+            case "P1_ATTACK","P2_ATTACK"-> atk=c;
+            case "P1_SKILL","P2_SKILL" -> skill=c;
         }
     }
-
-    void drawCharBox(Graphics g, Character c, int x, int y, String label) {
-        g.setColor(c.color);
-        g.fillRect(x, y, 100, 100);
-        g.setColor(Color.WHITE);
-        g.drawString(label, x, y - 10);
-        g.drawString(c.name, x + 20, y + 120);
+    Rectangle bounds(){ return new Rectangle(x,y,w,h); }
+}
+/* ----------------- 技能 ----------------- */
+static class Skill{
+    int x,y,sz=16,speed=10; Player owner;
+    Skill(Player p){
+        owner=p;
+        x = p.faceR ? p.x+p.w : p.x-sz;
+        y = p.y + 30;
     }
+    void update(){ x += owner.faceR ? speed : -speed; }
+    void draw(Graphics g){ g.setColor(Color.CYAN); g.fillOval(x,y,sz,sz); }
+    boolean hit(Player pl){ return bounds().intersects(pl.bounds()); }
+    boolean outOf(int W){ return x<-sz || x>W+sz; }
+    Rectangle bounds(){ return new Rectangle(x,y,sz,sz); }
+}
+/* ----------------- 設定檔 ----------------- */
+static class SettingsManager{
+    private final Properties p=new Properties();
+    private final String path;
+    SettingsManager(String path){
+        this.path=path; load();
+    }
+    void load(){
+        try(FileInputStream f=new FileInputStream(path)){ p.load(f); }
+        catch(IOException e){ setDefault(); }
+    }
+    void setDefault(){
+        p.setProperty("P1_LEFT","A");   p.setProperty("P1_RIGHT","D");
+        p.setProperty("P1_UP","W");     p.setProperty("P1_DOWN","S");
+        p.setProperty("P1_ATTACK","F"); p.setProperty("P1_SKILL","F");
+        p.setProperty("P2_LEFT","LEFT");p.setProperty("P2_RIGHT","RIGHT");
+        p.setProperty("P2_UP","UP");    p.setProperty("P2_DOWN","DOWN");
+        p.setProperty("P2_ATTACK","ENTER"); p.setProperty("P2_SKILL","L");
+        save();
+    }
+    void save(){
+        try(FileOutputStream f=new FileOutputStream(path)){ p.store(f,"keybinds"); }
+        catch(IOException ignored){}
+    }
+    /* 取得 Java KeyCode */
+    int k(String key){
+        String v=p.getProperty(key);
+        return switch(v){
+            case "LEFT"  -> KeyEvent.VK_LEFT;
+            case "RIGHT" -> KeyEvent.VK_RIGHT;
+            case "UP"    -> KeyEvent.VK_UP;
+            case "DOWN"  -> KeyEvent.VK_DOWN;
+            case "ENTER" -> KeyEvent.VK_ENTER;
+            default      -> KeyEvent.getExtendedKeyCodeForChar(v.charAt(0));
+        };
+    }
+    void setKey(String key,int code){ p.setProperty(key,KeyEvent.getKeyText(code)); }
+    Set<String> getKeys(){ return p.stringPropertyNames(); }
+}
+/* ----------------- 主程式 ----------------- */
+public static void main(String[] args){
+    SwingUtilities.invokeLater(()->{
+        JFrame f=new JFrame("KOF Game");
+        f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        f.setResizable(false);
+        f.add(new KOFGame());
+        f.pack(); f.setLocationRelativeTo(null); f.setVisible(true);
+    });
+}
 }
