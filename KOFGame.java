@@ -159,9 +159,16 @@ private void drawWinner(Graphics g){
     if(!winner.isEmpty()){ if(c==KeyEvent.VK_R) reset(); return; }
 
     /* 遊戲中控制 */
-    p1.handle(c,true); p2.handle(c,true);
+    if(c==p1.l){ p1.handle(c,true); p1.faceR=false; }
+     else if(c==p1.r){ p1.handle(c,true); p1.faceR=true; }
+      else p1.handle(c,true);
+      if(c==p2.l){ p2.handle(c,true); p2.faceR=false; }
+   else if(c==p2.r){ p2.handle(c,true); p2.faceR=true; }
+   else p2.handle(c,true);
     if(c==p1.skill && p1.cool==0){ skills.add(new Skill(p1)); p1.cool=300; }
     if(c==p2.skill && p2.cool==0){ skills.add(new Skill(p2)); p2.cool=300; }
+    if(p1.attack && p1.bounds().intersects(p2.bounds())) p2.hp--;
+if(p2.attack && p2.bounds().intersects(p1.bounds())) p1.hp--;
 }
 @Override public void keyReleased(KeyEvent e){ p1.handle(e.getKeyCode(),false); p2.handle(e.getKeyCode(),false); }
 @Override public void keyTyped(KeyEvent e){}
