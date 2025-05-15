@@ -193,13 +193,14 @@ public class KOFGame extends JPanel implements ActionListener, KeyListener {
     private void applyKey(String k,int code){ if(p1!=null) p1.apply(k,code); if(p2!=null) p2.apply(k,code); }
 
     private static String nice(int code){ return switch(code){ case KeyEvent.VK_LEFT->"←"; case KeyEvent.VK_RIGHT->"→"; case KeyEvent.VK_UP->"↑"; case KeyEvent.VK_DOWN->"↓"; default->KeyEvent.getKeyText(code);} ; }
-
+    
     static class Player{
         int x,y,w=40,h=80,hp=100,cool=0;
         Color col; boolean faceR=true;
         int l,r,u,d,atk,skill; boolean L,R,U,D;
         boolean attack = false;
         int atkCool = 0;
+        static final int GROUND_Y = 380; // 地面位置
 
         Player(int x,int y,Color c,int[] k){
             this.x=x; this.y=y; this.col=c;
@@ -209,8 +210,8 @@ public class KOFGame extends JPanel implements ActionListener, KeyListener {
             int s=5;
             if(L){ x-=s; faceR=false; }
             if(R){ x+=s; faceR=true;  }
-            if(U) y-=s;
-            if(D) y+=s;
+            // 僅允許在地面行走，禁止上下移動
+            y = GROUND_Y;
         }
         void draw(Graphics g){
             g.setColor(col); g.fillRect(x,y,w,h);
@@ -218,8 +219,8 @@ public class KOFGame extends JPanel implements ActionListener, KeyListener {
         void handle(int code,boolean press){
             if(code==l) L=press;
             if(code==r) R=press;
-            if(code==u) U=press;
-            if(code==d) D=press;
+            if(code==u) U=press; // 雖然設了 U，但實際上 move() 不會用
+            if(code==d) D=press; // 同上
             if(code==atk) attack = press;
         }
         void apply(String key,int c){
