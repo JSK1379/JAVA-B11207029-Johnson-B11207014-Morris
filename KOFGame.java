@@ -200,7 +200,11 @@ public class KOFGame extends JPanel implements ActionListener, KeyListener {
         int l,r,u,d,atk,skill; boolean L,R,U,D;
         boolean attack = false;
         int atkCool = 0;
-        static final int GROUND_Y = 380; // 地面位置
+        static final int GROUND_Y = 380;
+        static final int JUMP_STRENGTH = -15;
+        static final int GRAVITY = 1;
+        int vy = 0; // 垂直速度
+        boolean jumping = false;
 
         Player(int x,int y,Color c,int[] k){
             this.x=x; this.y=y; this.col=c;
@@ -210,8 +214,22 @@ public class KOFGame extends JPanel implements ActionListener, KeyListener {
             int s=5;
             if(L){ x-=s; faceR=false; }
             if(R){ x+=s; faceR=true;  }
-            // 僅允許在地面行走，禁止上下移動
-            y = GROUND_Y;
+
+            // 跳躍機制
+            if(U && !jumping){ // 按上跳
+                vy = JUMP_STRENGTH;
+                jumping = true;
+            }
+
+            if(jumping){
+                vy += GRAVITY;
+                y += vy;
+                if(y >= GROUND_Y){
+                    y = GROUND_Y;
+                    vy = 0;
+                    jumping = false;
+                }
+            }
         }
         void draw(Graphics g){
             g.setColor(col); g.fillRect(x,y,w,h);
@@ -219,8 +237,8 @@ public class KOFGame extends JPanel implements ActionListener, KeyListener {
         void handle(int code,boolean press){
             if(code==l) L=press;
             if(code==r) R=press;
-            if(code==u) U=press; // 雖然設了 U，但實際上 move() 不會用
-            if(code==d) D=press; // 同上
+            if(code==u) U=press;
+            if(code==d) D=press;
             if(code==atk) attack = press;
         }
         void apply(String key,int c){
@@ -234,8 +252,7 @@ public class KOFGame extends JPanel implements ActionListener, KeyListener {
             }
         }
         Rectangle bounds(){ return new Rectangle(x,y,w,h); }
-    }
-    static class Skill{
+    }    static class Skill{
         int x,y,sz=16,speed=10; Player owner;
         Skill(Player p){
             owner=p;
