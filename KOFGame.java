@@ -20,7 +20,7 @@ public class KOFGame extends JPanel implements ActionListener, KeyListener {
     public static final int W = 1550;      // 畫面寬
     public static final int H = 1080;      // 畫面高
     public static final int HUD_BAR_W = 400;
-    public static final int GROUND_Y = 600;    private final SettingsManager settings = new SettingsManager("keybinds.properties");
+    public static final int GROUND_Y = 500;    private final SettingsManager settings = new SettingsManager("keybinds.properties");
     private javax.swing.Timer timer = new javax.swing.Timer(16, this);
 
     /* -------- 角色定義改為含圖片 -------- */
