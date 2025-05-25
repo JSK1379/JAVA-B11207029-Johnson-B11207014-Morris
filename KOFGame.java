@@ -30,7 +30,8 @@ public class KOFGame extends JPanel implements ActionListener, KeyListener {
     private boolean lock1 = false, lock2 = false;
 
     private Player p1, p2;
-    private final java.util.List<Skill> skills = new ArrayList<>();
+    static final java.util.List<Skill> skills = new ArrayList<>();
+
     private boolean running = false, menu = false, rebinding = false;
     private String rebindingKey = "", winner = "";
 
@@ -386,129 +387,187 @@ public class KOFGame extends JPanel implements ActionListener, KeyListener {
         }
     }
 
-    static class Player {
-        int x, y, w = 40, h = 80, hp = 100, cool = 0;
-       static final int GROUND_Y = KOFGame.GROUND_Y;  // 換成全域常數
+    /* =========================================================
+ *                       Player
+ * =========================================================*/
+static class Player {
+    /* ---------- 基本屬性 ---------- */
+    int x, y, w = 40, h = 80;
+    int hp = 100;
+    int cool = 0;          // 大招冷卻
+    int atkCool = 0;       // 近戰冷卻
+    boolean faceR = true;
 
-        final Role role;
-        int walkIdx = 0, walkTick = 0;
-        boolean faceR = true;
-        int l, r, u, d, atk, skill;
-        boolean L, R, U, D;
-        boolean attack = false;
-        int atkCool = 0;
-       
-        static final int JUMP_STRENGTH = -15;
-        static final int GRAVITY = 1;
-        int vy = 0; // 垂直速度
-        boolean jumping = false;
+    /* ---------- 按鍵設定 ---------- */
+    final int l, r, u, d, atk, skill;
 
-        Player(int x, int y, Role role, int[] k) {
-             this.x = x; this.y = y; this.role = role;
-            l = k[0];
-            r = k[1];
-            u = k[2];
-            d = k[3];
-            atk = k[4];
-            skill = k[5];
-            // 若有 idle 圖，以其尺寸設定角色碰撞盒
-            if (role.idleImg != null) {
-                w = role.idleImg.getWidth();
-                h = role.idleImg.getHeight();
-            }
+    /* ---------- 動畫 / 跳躍 ---------- */
+    final Role role;
+    int walkIdx = 0, walkTick = 0;
+    static final int JUMP_STRENGTH = -15;
+    static final int GRAVITY       =   1;
+    int  vy = 0;
+    boolean jumping = false;
+    static final int GROUND_Y = KOFGame.GROUND_Y;
+
+    /* ---------- Combo 機制 ---------- */
+    private final Deque<Integer> inputBuf = new ArrayDeque<>();   // 最近按鍵
+    private final Deque<Long>    timeBuf  = new ArrayDeque<>();   // 時間戳記
+    /** 你可以依需求再新增／修改 */
+    private static final Combo[] COMBOS = {
+        // 右 → 右 → 攻擊  (示例，用實際 keyCode 取代)
+        new Combo("DASH_PUNCH", 400,
+                  KeyEvent.VK_RIGHT, KeyEvent.VK_RIGHT, KeyEvent.VK_G),
+        // ↓ → 技能（簡化波動拳）
+        new Combo("HADOUKEN",   500,
+                  KeyEvent.VK_DOWN,  KeyEvent.VK_RIGHT, KeyEvent.VK_F)
+    };
+
+    /* ---------- 建構子 ---------- */
+    Player(int x, int y, Role role, int[] keyMap) {
+        this.x = x; this.y = y; this.role = role;
+
+        l = keyMap[0]; r = keyMap[1]; u = keyMap[2];
+        d = keyMap[3]; atk = keyMap[4]; skill = keyMap[5];
+
+        // 如果有 idle 圖，根據尺寸設定碰撞盒
+        if (role.idleImg != null) {
+            w = role.idleImg.getWidth();
+            h = role.idleImg.getHeight();
         }
-
-        void move(){
-    int s = 5;
-    boolean moving = false;
-
-    if (L) { x -= s; faceR = false; moving = true; }
-    if (R) { x += s; faceR = true;  moving = true; }
-
-
-    if (moving) {
-        if (++walkTick >= 6) {      // 6 可自行調快慢
-            walkIdx ^= 1;           // 0↔1 翻轉
-            walkTick = 0;
-        }
-    } else {
-        walkIdx = 0;                // 停止時回到第一張 walk 圖
     }
 
-            // 跳躍機制
-            if (U && !jumping) { // 按上跳
-                vy = JUMP_STRENGTH;
-                jumping = true;
-            }
+    /* ---------- 每 frame 移動 ---------- */
+    void move() {
+        final int speed = 5;
+        boolean moving = false;
 
-            if (jumping) {
-                vy += GRAVITY;
-                y += vy;
-                if (y >= GROUND_Y) {
-                    y = GROUND_Y;
-                    vy = 0;
-                    jumping = false;
+        if (L) { x -= speed; faceR = false; moving = true; }
+        if (R) { x += speed; faceR = true;  moving = true; }
+
+        // 走路二幀動畫
+        if (moving) {
+            if (++walkTick >= 6) { walkIdx ^= 1; walkTick = 0; }
+        } else walkIdx = 0;
+
+        // 跳躍
+        if (U && !jumping) { vy = JUMP_STRENGTH; jumping = true; }
+        if (jumping) {
+            vy += GRAVITY; y += vy;
+            if (y >= GROUND_Y) { y = GROUND_Y; vy = 0; jumping = false; }
+        }
+    }
+
+    /* ---------- 繪圖 ---------- */
+    void draw(Graphics g) {
+        BufferedImage img = selectFrame();
+
+        if (img != null) {
+            // 等比例縮到角色高度 h
+            int hDst = h;
+            int wDst = img.getWidth() * hDst / img.getHeight();
+            int drawX = x + (w - wDst) / 2;
+            int drawY = y + h - hDst;
+
+            Graphics2D g2 = (Graphics2D) g;
+            if (!faceR) {
+                g2.drawImage(img, drawX + wDst, drawY, -wDst, hDst, null);
+            } else {
+                g2.drawImage(img, drawX, drawY, wDst, hDst, null);
+            }
+        } else { // 沒圖 fallback
+            g.setColor(role.fallbackColor);
+            g.fillRect(x, y, w, h);
+        }
+    }
+    private BufferedImage selectFrame() {
+        if (attack && role.attackImg != null)                   return role.attackImg;
+        if ((L || R) && role.walk1Img != null)                 return (walkIdx==0?role.walk1Img:role.walk2Img);
+        return role.idleImg;
+    }
+
+    /* ---------- 處理按鍵 ---------- */
+    boolean L, R, U, D, attack;
+    void handle(int code, boolean press) {
+        if (code == l) L = press;
+        if (code == r) R = press;
+        if (code == u) U = press;
+        if (code == d) D = press;
+        if (code == atk) attack = press;
+
+        /* 只在「按下」瞬間記錄進 Combo 緩衝 */
+        if (press) {
+            inputBuf.addLast(code);
+            timeBuf.addLast(System.currentTimeMillis());
+            while (inputBuf.size() > 10) { inputBuf.removeFirst(); timeBuf.removeFirst(); }
+            checkCombo();
+        }
+    }
+
+    /* ---------- Combo 判定 ---------- */
+    private void checkCombo() {
+        for (Combo c : COMBOS) {
+            if (inputBuf.size() < c.seq.length) continue;
+
+            // 從尾端比對序列
+            Iterator<Integer> itKey = inputBuf.descendingIterator();
+            boolean ok = true;
+            for (int i = c.seq.length - 1; i >= 0; i--) {
+                if (!itKey.hasNext() || !Objects.equals(itKey.next(), c.seq[i])) { ok = false; break; }
+            }
+            if (!ok) continue;
+
+            // 時間窗
+            long newest = timeBuf.peekLast();
+            long oldest = newest;
+            Iterator<Long> itTime = timeBuf.descendingIterator();
+            for (int i = 0; i < c.seq.length; i++) oldest = itTime.next();
+            if (newest - oldest > c.window) continue;
+
+            // 觸發
+            performCombo(c.name);
+            inputBuf.clear(); timeBuf.clear();
+            break;
+        }
+    }
+
+    private void performCombo(String name) {
+        switch (name) {
+            case "DASH_PUNCH" -> {
+                if (cool == 0) {
+                    x += faceR ? 120 : -120;           // 衝刺位移
+                    atkCool = 0;                       // 立即判定一次傷害
+                    cool = 300;                        // 冷卻
+                }
+            }
+            case "HADOUKEN" -> {
+                if (cool == 0) {
+                    Skill s = new Skill(this);
+                    s.sz = 32; s.speed = 14;           // 強化版火球
+                    KOFGame.skills.add(s);             // skills 為 KOFGame 的 public static List<Skill>
+                    cool = 500;
                 }
             }
         }
-
-        void draw(Graphics g) {
-    BufferedImage src = null;
-
-    if (attack && role.attackImg != null) {
-        src = role.attackImg;                       // 攻擊
-    } else if ((L || R) && role.walk1Img != null) {
-        src = (walkIdx == 0 ? role.walk1Img : role.walk2Img); // 走路
-    } else if (role.idleImg != null) {
-        src = role.idleImg;                         // 待機
     }
 
-    if (src != null) {
-        // === 計算縮放後大小：高度貼滿 h，寬度等比例 ===
-        int hDst = h;                                                    // h = 80
-        int wDst = src.getWidth() * hDst / src.getHeight();              // 等比例
+    /* ---------- 其他工具 ---------- */
+    void apply(String key, int kc) { /* 同你原來邏輯 */ }
+    Rectangle bounds() { return new Rectangle(x, y, w, h); }
+}
 
-        // === 計算繪製位置：水平置中碰撞盒，底邊貼地 ===
-        int drawX = x + (w - wDst) / 2;          // 水平置中 (w = 40)
-        int drawY = y + h - hDst;                // Y + h = 腳底 → 上移 hDst
+    static class Combo {
+    final int[] seq;          // 需要的按鍵序列
+    final int   window;       // 時間窗 (ms)
+    final String name;        // 方便偵錯
 
-        Graphics2D g2 = (Graphics2D) g;
-        if (!faceR) {                            // 面向左→水平翻轉
-            g2.drawImage(src,
-                         drawX + wDst, drawY,
-                         -wDst, hDst, null);
-        } else {
-            g2.drawImage(src, drawX, drawY, wDst, hDst, null);
-        }
-    } else {                                     // 沒圖→fallback 方塊
-        g.setColor(role.fallbackColor);
-        g.fillRect(x, y, w, h);
+    Combo(String name, int window, int... seq){
+        this.name = name;
+        this.window = window;
+        this.seq = seq;
     }
 }
 
-        void handle(int code, boolean press) {
-            if (code == l) L = press;
-            if (code == r) R = press;
-            if (code == u) U = press;
-            if (code == d) D = press;
-            if (code == atk) attack = press;
-        }
-
-        void apply(String key, int c) {
-            switch (key) {
-                case "P1_LEFT", "P2_LEFT" -> l = c;
-                case "P1_RIGHT", "P2_RIGHT" -> r = c;
-                case "P1_UP", "P2_UP" -> u = c;
-                case "P1_DOWN", "P2_DOWN" -> d = c;
-                case "P1_ATTACK", "P2_ATTACK" -> atk = c;
-                case "P1_SKILL", "P2_SKILL" -> skill = c;
-            }
-        }
-
-        Rectangle bounds() {
-            return new Rectangle(x, y, w, h);
-        }
-    }
 
     /* =====================================================
  *                      投射技能
