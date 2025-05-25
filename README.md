@@ -103,5 +103,6 @@
 
 ## 序列圖 (Sequence Diagram)
 
-![SpaceShipGame_AllFlows]
+![1](https://github.com/user-attachments/assets/87151e30-a35f-4221-801d-2d1820f19c31)
+
 
