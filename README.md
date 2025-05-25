@@ -31,7 +31,7 @@
 
 ## 報告影片連結
 
-* [點此觀看報告影片](https://youtu.be/0yFFdqXaYN0)
+* [點此觀看報告影片](https://youtu.be/yxd0bB5GPoE)
 
 ---
 
@@ -72,18 +72,6 @@
 * **作業系統**：Windows／macOS／Linux
 * **Java**：JDK 24 以上
 
-### 下載與運行
-
-1. 下載 `SSG.jar`。
-2. 開啟終端機執行：
-
-   ```bash
-   java -jar SSG.jar              # 預設全螢幕
-   java -jar SSG.jar   --windowed   # 一般視窗
-   java -jar SSG.jar   --borderless # 無邊框
-   ```
-
----
 
 ## ChatGPT協助釐清問題
 
